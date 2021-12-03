@@ -26,7 +26,7 @@ const CONTAINS: &str = "daan";
 const NUM_THREADS: u32 = 4;
 
 fn main() {
-    //benchmark();
+    // benchmark();
 
     let re = Regex::new(r"[13456789abcdefghijkmnopqrstuwxyz]{0,59}$").unwrap();
     if STARTS_WITH != "" && !re.is_match(STARTS_WITH) {
@@ -62,17 +62,18 @@ fn inner(rng: &mut ChaCha20Rng, tx: Sender<()>) {
         let private_key = derive_private_key(seed, 0);
         let public_key = derive_public_key(private_key);
         let address = derive_address(public_key);
-        if address[6..].starts_with(STARTS_WITH)
+        if address[1..].starts_with(STARTS_WITH)
             && address.ends_with(ENDS_WITH)
             && address.contains(CONTAINS)
         {
-            println!("{}\n{}", address, bytes_to_hexstring(&seed));
+            println!("nano_{}\n{}", address, bytes_to_hexstring(&seed));
             tx.send(()).unwrap();
             break;
         }
     }
 }
 
+// 11.584
 fn benchmark() {
     let rng = &mut ChaCha20Rng::from_entropy();
 
@@ -123,16 +124,12 @@ fn derive_public_key(private_key: Hash) -> PublicKey {
 fn derive_address(public_key: PublicKey) -> String {
     // Code based on Feeless project implementation
     let mut address = String::with_capacity(65);
-    address.push_str("nano_");
 
-    const PKP_LEN: usize = 4 + 8 * 32;
     const PKP_CAPACITY: usize = 4 + 8 * 32 + 4;
     let mut bits: BitVec<Msb0, u8> = BitVec::with_capacity(PKP_CAPACITY);
     let pad: BitVec<Msb0, u8> = bitvec![Msb0, u8; 0; 4];
     bits.extend_from_bitslice(&pad);
     bits.extend_from_raw_slice(public_key.as_bytes());
-    debug_assert_eq!(bits.capacity(), PKP_CAPACITY);
-    debug_assert_eq!(bits.len(), PKP_LEN);
     let public_key_part = encode_nano_base_32(&bits);
     address.push_str(&public_key_part);
 
@@ -153,12 +150,7 @@ static ALPHABET_VEC: Lazy<Vec<char>> = Lazy::new(|| ALPHABET.chars().collect());
 const ENCODING_BITS: usize = 5;
 
 fn encode_nano_base_32(bits: &BitSlice<Msb0, u8>) -> String {
-    debug_assert_eq!(
-        bits.len() % ENCODING_BITS,
-        0,
-        "BitSlice must be divisible by 5"
-    );
-    let mut s = String::new(); // TODO: with_capacity
+    let mut s = String::new();
     for idx in (0..bits.len()).step_by(ENCODING_BITS) {
         let chunk: &BitSlice<Msb0, u8> = &bits[idx..idx + ENCODING_BITS];
         let value: u8 = chunk.load_be();
