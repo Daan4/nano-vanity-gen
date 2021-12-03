@@ -28,7 +28,6 @@ const NUM_THREADS: u32 = 4;
 fn main() {
     //benchmark();
 
-    // todo validate if pattern can actually be matched 
     let re = Regex::new(r"[13456789abcdefghijkmnopqrstuwxyz]{0,59}$").unwrap();
     if STARTS_WITH != "" && !re.is_match(STARTS_WITH) {
         println!("Invalid STARTS_WITH setting");
