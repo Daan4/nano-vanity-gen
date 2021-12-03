@@ -73,7 +73,6 @@ fn inner(rng: &mut ChaCha20Rng, tx: Sender<()>) {
     }
 }
 
-// 11.584
 fn benchmark() {
     let rng = &mut ChaCha20Rng::from_entropy();
 
