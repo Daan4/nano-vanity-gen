@@ -5,37 +5,97 @@ use ed25519_dalek::{PublicKey, SecretKey};
 use once_cell::sync::Lazy;
 use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
+use regex::Regex;
 
-const STARTS_WITH: &str = "daan";
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::time::Instant;
 
-type Seed = [u8; 32];
+// --SETTINGS--
+
+// The text the vanity address should start with, empty to ignore
+const STARTS_WITH: &str = "";
+
+// The text the vanity address should end with, empty to ignore
+const ENDS_WITH: &str = "";
+
+// The text the vanity address should contain, empty to ignore
+const CONTAINS: &str = "daan";
+
+// Number of threads, set to number of logical processors
+const NUM_THREADS: u32 = 4;
 
 fn main() {
-    let rng = &mut ChaCha20Rng::from_entropy();
+    //benchmark();
 
-    // todo validate if pattern can actually be matched
+    let re = Regex::new(r"[13456789abcdefghijkmnopqrstuwxyz]{0,59}$").unwrap();
+    if STARTS_WITH != "" && !re.is_match(STARTS_WITH) {
+        println!("Invalid STARTS_WITH setting");
+        return;
+    }
+    if ENDS_WITH != "" && !re.is_match(ENDS_WITH) {
+        println!("Invalid ENDS_WITH setting");
+        return;
+    }
+    if CONTAINS != "" && !re.is_match(CONTAINS) {
+        println!("Invalid CONTAINS setting");
+        return;
+    }
 
+    let mut ts: Vec<thread::JoinHandle<()>> = vec![];
+    let (tx, rx): (Sender<()>, Receiver<()>) = channel();
+
+    for _ in 0..NUM_THREADS {
+        let tx_clone = tx.clone();
+        ts.push(thread::spawn(|| {
+            let rng = &mut ChaCha20Rng::from_entropy();
+            inner(&mut rng.clone(), tx_clone);
+        }));
+    }
+
+    rx.recv().unwrap();
+}
+
+fn inner(rng: &mut ChaCha20Rng, tx: Sender<()>) {
     loop {
         let seed = generate_random_seed(rng);
         let private_key = derive_private_key(seed, 0);
         let public_key = derive_public_key(private_key);
         let address = derive_address(public_key);
-        println!("{}", address);
-        if address[6..].starts_with(STARTS_WITH) {
-            println!("{}", bytes_to_hexstring(&seed));
+        if address[6..].starts_with(STARTS_WITH)
+            && address.ends_with(ENDS_WITH)
+            && address.contains(CONTAINS)
+        {
+            println!("{}\n{}", address, bytes_to_hexstring(&seed));
+            tx.send(()).unwrap();
             break;
         }
     }
 }
 
-/// Benchmark each function
 fn benchmark() {
+    let rng = &mut ChaCha20Rng::from_entropy();
 
+    let mut count = 0;
+    let runs = 20000;
+    let now = Instant::now();
+    while count < runs {
+        let seed = generate_random_seed(rng);
+        let private_key = derive_private_key(seed, 0);
+        let public_key = derive_public_key(private_key);
+        derive_address(public_key);
+        count += 1;
+    }
+    println!(
+        "{} runs: {}s",
+        runs,
+        now.elapsed().as_millis() as f32 / 1000.0
+    );
 }
 
 /// Generate random seed
-fn generate_random_seed(rng: &mut ChaCha20Rng) -> Seed {
-    let mut seed: Seed = [0; 32];
+fn generate_random_seed(rng: &mut ChaCha20Rng) -> [u8; 32] {
+    let mut seed = [0; 32];
     for i in 0..32 {
         seed[i] = rng.gen_range(0..16) << 4 | rng.gen_range(0..16);
     }
@@ -43,7 +103,7 @@ fn generate_random_seed(rng: &mut ChaCha20Rng) -> Seed {
 }
 
 /// Derive private key from seed and index
-fn derive_private_key(seed: Seed, index: u32) -> Hash {
+fn derive_private_key(seed: [u8; 32], index: u32) -> Hash {
     let mut wtr = vec![];
     wtr.write_u32::<BigEndian>(index).unwrap();
     Params::new()
@@ -59,7 +119,7 @@ fn derive_public_key(private_key: Hash) -> PublicKey {
     PublicKey::from(&SecretKey::from_bytes(private_key.as_bytes()).unwrap())
 }
 
- /// Derive address from public key
+/// Derive address from public key
 fn derive_address(public_key: PublicKey) -> String {
     // Code based on Feeless project implementation
     let mut address = String::with_capacity(65);
@@ -108,9 +168,11 @@ fn encode_nano_base_32(bits: &BitSlice<Msb0, u8>) -> String {
     s
 }
 
-const HEX: [&str; 16] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f"];
+const HEX: [&str; 16] = [
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f",
+];
 
-fn bytes_to_hexstring(bytes: &[u8]) -> String {     
+fn bytes_to_hexstring(bytes: &[u8]) -> String {
     let mut buf = String::new();
     for x in bytes.iter() {
         buf += HEX[(*x >> 4) as usize];
