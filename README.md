@@ -1,7 +1,7 @@
 # nano-vanity-gen
 Nano currency vanity address generator
 
-Uses a cryptographically secure RNG ChaCha20rng https://docs.rs/rand_chacha/0.2.1/rand_chacha/struct.ChaCha20Rng.html
+Uses a cryptographically secure RNG ChaCha20rng https://docs.rs/rand_chacha/0.3.1/rand_chacha/struct.ChaCha20Rng.html
 
 Set up the desired vanity properties (starting with, ending with, containing) in main.rs and the number of threads to use, then run the project. It will output the first matching seed and (index 0) address.
 
